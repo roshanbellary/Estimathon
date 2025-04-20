@@ -1,0 +1,2 @@
+python:
+  poetry_requirements: "--no-root"
