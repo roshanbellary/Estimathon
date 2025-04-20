@@ -143,6 +143,8 @@ def leave_team(user):
         teams_col.delete_one({"_id": team_id})
 
 def team_management(user):
+    if user.get("is_admin"):
+        return;
     user = users_col.find_one({"email": user["email"]})  # Refresh
     if user.get("team_id"):
         team = get_team(user)
@@ -151,7 +153,7 @@ def team_management(user):
         st.write("Team members:")
         for member in team["members"]:
             st.write(f"- {member}")
-        if st.button("Leave Team"):
+        if st.button("Leave Team") and get_contest_state() == "not_started":
             leave_team(user)
             st.success("You have left the team.")
             st.rerun()
@@ -229,6 +231,8 @@ def get_team_answers(team_id):
     return {a["qnum"]: a for a in answers}
 
 def submit_answer(team_id, qnum, min_val, max_val, answer):
+    if get_contest_state() != "running":
+        return False, "Contest is not running."
     team_answers = team_answers_col
     rec = team_answers.find_one({"team_id": team_id, "qnum": qnum})
     correct = (min_val <= answer <= max_val)
@@ -346,6 +350,15 @@ def show_leaderboard():
     results.sort(key=lambda x: x["score"], reverse=True)
     st.table(results)
 
+def show_live_leaderboard():
+    st.header("Live Leaderboard (Auto-updating)")
+    teams = list(teams_col.find({}))
+    results = []
+    for team in teams:
+        score, wrong, S = compute_team_score(team["_id"])
+        results.append({"name": team["name"], "score": score, "wrong": wrong, "S+10": S})
+    results.sort(key=lambda x: x["score"], reverse=True)
+    st.table(results)
 
 def main():
     ensure_admin()
@@ -380,10 +393,13 @@ def main():
     # Admin controls
     if user.get("is_admin"):
         admin_panel()
+    # Live leaderboard for admin during contest
+    status = get_contest_state()
+    if user.get("is_admin") and status == "running":
+        show_live_leaderboard()
     # Team management section
     team_management(user)
     # Question answering interface or results
-    status = get_contest_state()
     if status == "finished":
         show_team_results(user)
         if user.get("is_admin"):
