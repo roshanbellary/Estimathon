@@ -22,7 +22,6 @@ contest_col = db["contest_state"]
 questions_col = db["questions"]
 team_answers_col = db["team_answers"]
 
-# --- Total Attempts Logic ---
 MAX_ATTEMPTS = 34
 
 def hash_password(password):
@@ -283,6 +282,8 @@ def team_questions_interface(user):
     questions = list(questions_col.find({}).sort("qnum", 1))
     answers = get_team_answers(team["_id"])
     total_attempts = get_total_attempts(team["_id"])
+    score, wrong, S = compute_team_score(team["_id"])
+    st.info(f"Current Team Score: {score}")
     st.header("Questions")
     st.warning(f"Total attempts used: {total_attempts} / {MAX_ATTEMPTS}")
     attempts_left = MAX_ATTEMPTS - total_attempts
@@ -335,7 +336,6 @@ def show_team_results(user):
     st.info(f"Score: {score}")
     st.write(f"Wrong answers: {wrong}")
     st.write(f"Sum of (max/min) for correct answers: {S}")
-    # Optionally, show per-question breakdown
     answers = list(team_answers_col.find({"team_id": team["_id"]}))
     st.subheader("Breakdown:")
     for a in sorted(answers, key=lambda x: x["qnum"]):
@@ -345,14 +345,15 @@ def show_team_results(user):
             st.error(f"Q{a['qnum']}: Wrong after {a['attempts']} attempts. Last tried: [{a['min']}, {a['max']}]" )
 
 def show_leaderboard():
-    st.header("Leaderboard")
     teams = list(teams_col.find({}))
     results = []
     for team in teams:
         score, wrong, S = compute_team_score(team["_id"])
-        results.append({"name": team["name"], "score": score, "wrong": wrong, "S+10": S})
-    results.sort(key=lambda x: x["score"], reverse=True)
+        attempts = get_total_attempts(team["_id"])
+        results.append({"name": team["name"], "score": score, "attempts": attempts, "wrong": wrong, "S+10": S})
+    results.sort(key=lambda x: (x["score"], x["attempts"]))
     st.table(results)
+
 
 def show_live_leaderboard():
     st.header("Live Leaderboard")
@@ -360,8 +361,9 @@ def show_live_leaderboard():
     results = []
     for team in teams:
         score, wrong, S = compute_team_score(team["_id"])
-        results.append({"name": team["name"], "score": score, "wrong": wrong, "S+10": S})
-    results.sort(key=lambda x: x["score"], reverse=True)
+        attempts = get_total_attempts(team["_id"])
+        results.append({"name": team["name"], "score": score, "attempts": attempts, "wrong": wrong, "S+10": S})
+    results.sort(key=lambda x: (x["score"], x["attempts"]))
     st.table(results)
 
 def main():
@@ -369,9 +371,6 @@ def main():
     ensure_questions()
     st.set_page_config('Estimathon', '🎯', layout='wide')
     controller = CookieController()
-
-    # --- Cookie-based persistent login ---
-    # If session_state['user'] is not set, check cookie
     if "user" not in st.session_state:
         user_cookie = controller.get('estimathon_user')
         if user_cookie:
