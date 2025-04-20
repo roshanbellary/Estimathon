@@ -306,8 +306,6 @@ def team_questions_interface(user):
 def compute_team_score(team_id):
     answers = list(team_answers_col.find({"team_id": team_id}))
     num_questions = len(list(questions_col.find({})))
-    print("Number of questions:", num_questions)
-    print("Number of answers:", len(answers))
     wrong = 0
     S = 0
     for a in answers:
@@ -316,9 +314,6 @@ def compute_team_score(team_id):
         else:
             wrong += 1
     wrong += (num_questions - len(answers))
-    print("Wrong answers:", wrong)
-    print("Sum of (max/min) for correct answers:", S)
-    print("Score:", (2 ** (wrong)) * (10 + S))
     score = (2 ** (wrong)) * (10 + S)
     return score, wrong, S+10
 
