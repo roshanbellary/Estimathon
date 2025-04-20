@@ -22,6 +22,9 @@ contest_col = db["contest_state"]
 questions_col = db["questions"]
 team_answers_col = db["team_answers"]
 
+# --- Total Attempts Logic ---
+MAX_ATTEMPTS = 34
+
 def hash_password(password):
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt())
 
@@ -153,7 +156,7 @@ def team_management(user):
         st.write("Team members:")
         for member in team["members"]:
             st.write(f"- {member}")
-        if st.button("Leave Team") and get_contest_state() == "not_started":
+        if get_contest_state() == "not_started" and st.button("Leave Team"):
             leave_team(user)
             st.success("You have left the team.")
             st.rerun()
@@ -230,24 +233,33 @@ def get_team_answers(team_id):
     answers = team_answers_col.find({"team_id": team_id})
     return {a["qnum"]: a for a in answers}
 
+def get_total_attempts(team_id):
+    # Sum all attempts for this team
+    answers = team_answers_col.find({"team_id": team_id})
+    return sum(a.get("attempts", 0) for a in answers)
+
 def submit_answer(team_id, qnum, min_val, max_val, answer):
     if get_contest_state() != "running":
-        return False, "Contest is not running."
+        return False, "Contest has stopped running. Nice try though :) "
+    if min_val <= 0 or max_val <= 0:
+        return False, "Min and Max cannot be 0 or less."
+    if min_val > max_val:
+        return False, "Min cannot be greater than Max."
+    if get_total_attempts(team_id) >= MAX_ATTEMPTS:
+        return False, f"Your team has used all {MAX_ATTEMPTS} attempts. No more submissions allowed."
     team_answers = team_answers_col
     rec = team_answers.find_one({"team_id": team_id, "qnum": qnum})
     correct = (min_val <= answer <= max_val)
     if rec:
-        if rec["attempts"] >= 3:
-            return False, "No attempts left."
-        # If already correct, only allow shrinking range
-        if rec["correct"] and (min_val > rec["min"] or max_val < rec["max"]):
-            team_answers.update_one({"_id": rec["_id"]}, {"$set": {"min": min_val, "max": max_val}})
-            return True, "Range updated."
-        elif not rec["correct"]:
+        if (rec['correct']):
+            if min_val >= rec["min"] and max_val <= rec["max"] and (min_val != rec["min"] or max_val != rec["max"]):
+                team_answers.update_one({"_id": rec["_id"]}, {"$set": {"min": min_val, "max": max_val, "correct": correct}, "$inc": {"attempts": 1}})
+                return True, "Submitted."
+            else:
+                return False, "Range is larger than previous correct submission."
+        else:
             team_answers.update_one({"_id": rec["_id"]}, {"$set": {"min": min_val, "max": max_val, "correct": correct}, "$inc": {"attempts": 1}})
             return True, "Submitted."
-        else:
-            return False, "Cannot expand range after correct."
     else:
         team_answers.insert_one({
             "team_id": team_id,
@@ -270,37 +282,34 @@ def team_questions_interface(user):
     ensure_questions()
     questions = list(questions_col.find({}).sort("qnum", 1))
     answers = get_team_answers(team["_id"])
+    total_attempts = get_total_attempts(team["_id"])
     st.header("Questions")
+    st.warning(f"Total attempts used: {total_attempts} / {MAX_ATTEMPTS}")
+    attempts_left = MAX_ATTEMPTS - total_attempts
     for q in questions:
         qnum = q["qnum"]
         st.markdown(f"**Q{qnum}: {q['text']}**")
         ans = answers.get(qnum)
         if ans:
-            attempts_left = 3 - ans["attempts"]
             if ans["correct"]:
-                st.success(f"Correct! Range: [{ans['min']}, {ans['max']}]. Attempts left: {attempts_left}")
+                st.success(f"Correct! Range: [{ans['min']}, {ans['max']}] Attempts used on this question: {ans['attempts']}")
             else:
-                st.warning(f"Wrong. Attempts left: {attempts_left}")
-                st.write(f"Last tried: [{ans['min']}, {ans['max']}]")
-        else:
-            attempts_left = 3
-        if not ans or (ans["attempts"] < 3 and (not ans["correct"] or True)):
+                st.warning(f"Wrong. Attempts used on this question: {ans['attempts']}")
+                st.write(f"Last tried: [{ans['min']}, {ans['max']}]" )
+        if attempts_left > 0:
             with st.form(f"form_{qnum}"):
                 min_val = st.number_input(f"Min for Q{qnum}", key=f"min_{qnum}")
                 max_val = st.number_input(f"Max for Q{qnum}", key=f"max_{qnum}")
                 submit = st.form_submit_button("Submit")
                 if submit:
-                    if min_val > max_val:
-                        st.error("Min cannot be greater than Max.")
-                    elif min_val == 0:
-                        st.error("Min cannot be 0.")
+                    ok, msg = submit_answer(team["_id"], qnum, min_val, max_val, q["answer"])
+                    if ok:
+                        st.success(msg)
+                        st.rerun()
                     else:
-                        ok, msg = submit_answer(team["_id"], qnum, min_val, max_val, q["answer"])
-                        if ok:
-                            st.success(msg)
-                            st.rerun()
-                        else:
-                            st.error(msg)
+                        st.error(msg)
+        else:
+            st.info(f"No attempts remaining for your team.")
         st.markdown("---")
 
 def compute_team_score(team_id):
@@ -346,7 +355,7 @@ def show_leaderboard():
     st.table(results)
 
 def show_live_leaderboard():
-    st.header("Live Leaderboard (Auto-updating)")
+    st.header("Live Leaderboard")
     teams = list(teams_col.find({}))
     results = []
     for team in teams:
@@ -370,7 +379,7 @@ def main():
             if user:
                 st.session_state["user"] = user
 
-    st.title("Estimathon Competition")
+    st.title("M&T Board x Bridgewater Estimathon")
     if "auth_mode" not in st.session_state:
         st.session_state["auth_mode"] = "login"
     if "user" not in st.session_state:
