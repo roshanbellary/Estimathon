@@ -124,6 +124,8 @@ def join_team(join_code, user_email):
         return False, "No team with that join code."
     if user_email in team["members"]:
         return False, "You are already in this team."
+    if len(team["members"]) >= 5:
+        return False, "This team already has the maximum number of members (5)."
     teams_col.update_one({"_id": team["_id"]}, {"$push": {"members": user_email}})
     users_col.update_one({"email": user_email}, {"$set": {"team_id": team["_id"]}})
     return True, team["name"]
