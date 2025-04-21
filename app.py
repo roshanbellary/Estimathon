@@ -22,7 +22,7 @@ contest_col = db["contest_state"]
 questions_col = db["questions"]
 team_answers_col = db["team_answers"]
 
-MAX_ATTEMPTS = 34
+MAX_ATTEMPTS = 40
 
 def hash_password(password):
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt())
