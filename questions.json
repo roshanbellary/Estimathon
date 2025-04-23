@@ -1,7 +1,7 @@
 [
   {"qnum": 1, "text": "What percentage of Fortune 500 companies mentioned AI in their annual reports in 2023?", "answer": 64.8},
   {"qnum": 2, "text": "How many U.S. states start with the letter “M”?", "answer": 8},
-  {"qnum": 3, "text": "How many seconds has it been since Jan 1, 2000 at 12am (count to April 22, 2025 at 12am)?", "answer": 7985952000},
+  {"qnum": 3, "text": "How many seconds has it been since Jan 1, 2000 at 12am (count to April 22, 2025 at 12am)?", "answer": 798595200},
   {"qnum": 4, "text": "How many distinct permutations are there of the letters in the word “BRIDGEWATER”?", "answer": 9979200},
   {"qnum": 5, "text": "How many piano tuners work or live in Chicago?", "answer": 125},
   {"qnum": 6, "text": "What is the maximum number (world record) of people you could fit in a Mini Cooper?", "answer": 27},
